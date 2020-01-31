@@ -1,4 +1,6 @@
-from PyQt5.QtCore import QRunnable, pyqtSlot
+from PyQt5.QtCore import QRunnable, pyqtSlot, QObject, pyqtSignal
+class WorkerSignal(QObject):
+    finished = pyqtSignal()
 
 class CopyWorker(QRunnable):
 
@@ -7,9 +9,11 @@ class CopyWorker(QRunnable):
         self.fn = fn
         self.args = args
         self.kwargs = kwargs
+        self.signals = WorkerSignal()
 
     @pyqtSlot()
     def run(self):
         print("start thread")
         self.fn(*self.args)
+        self.signals.finished.emit()
         print("thread done")

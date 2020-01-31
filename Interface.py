@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QMessageBox, QListWidget, QApplication, QFileDialog, QFormLayout, QLabel, QGroupBox, QComboBox, QSpinBox,QHBoxLayout, QVBoxLayout, QPushButton, QWidget, QLineEdit, QStatusBar, QSizePolicy, QMainWindow, QSlider, QDialogButtonBox, QDialog
+from PyQt5.QtWidgets import QLabel, QMessageBox, QListWidget, QApplication, QFileDialog, QFormLayout, QLabel, QGroupBox, QComboBox, QSpinBox,QHBoxLayout, QVBoxLayout, QPushButton, QWidget, QLineEdit, QStatusBar, QSizePolicy, QMainWindow, QSlider, QDialogButtonBox, QDialog
 import sys
 import Backup
 from PyQt5.QtCore import QThreadPool
@@ -45,6 +45,7 @@ class Widget(QWidget):
     def __init__(self):
         super().__init__()
         self.BM = None
+
         self.layout = QVBoxLayout(self)
         self.Buttons()
         self.list = myListWidget()
@@ -69,7 +70,12 @@ class Widget(QWidget):
         self.layout.addWidget(self.box)
         self.layout.addWidget(self.addBUI)
         self.layout.addWidget(self.buttonSave)
-
+        try:
+            dirs = self.readrecall()
+            print(dirs)
+            self.BM = Backup.BackupManager(dirs[-1].strip("\n"))
+            self.loadInterface()
+        except: print("recall failed")
 
         self.setLayout(self.layout)
 
@@ -103,24 +109,25 @@ class Widget(QWidget):
         self.BUCbutton.hide()
         self.removeButton.hide()
     def OpenBackupManager(self):
-        if self.BM is not None:
-            self.BM.close()
-            self.list.clear()
         dir = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
         if dir:
+            if self.BM is not None:
+                self.BM.close()
+                self.list.clear()
             self.BM = Backup.BackupManager(dir)
-            self.BackupList()
-
-            self.BUbutton.show()
-            self.BUCbutton.show()
-            self.removeButton.show()
-            self.Addbutton.show()
-            self.Delbutton.show()
-            self.box.show()
-            self.box.setText("")
-            self.addBUI.show()
-            self.buttonSave.show()
-
+            self.loadInterface()
+            self.writerecall(dir)
+    def loadInterface(self):
+        self.BackupList()
+        self.BUbutton.show()
+        self.BUCbutton.show()
+        self.removeButton.show()
+        self.Addbutton.show()
+        self.Delbutton.show()
+        self.box.show()
+        self.box.setText("")
+        self.addBUI.show()
+        self.buttonSave.show()
     def AddBackup(self):
         dir = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
         if dir and self.list.current():
@@ -178,15 +185,35 @@ class Widget(QWidget):
     def savetxt(self):
         try: self.BM.save_to_txt()
         except: print("no BM detected")
+    def writerecall(self, dir):
+        f = open("recall.txt", 'w')
+        f.write(dir + "\n")
+        print(dir)
+        f.close()
+    def readrecall(self):
+        f = open("recall.txt", 'r')
+        dirs = f.readlines()
+        f.close()
+        return dirs
 class Window(QMainWindow):
     def __init__(self):
         super().__init__()
         self.wid = Widget()
         self.setCentralWidget(self.wid)
+        self.updateButton = QPushButton('refresh', self)
+        self.updateButton.clicked.connect(self.refresh)
+        self.l = QLabel()
+        self.l.setText("hello world")
         self.sb = QStatusBar()
+        self.sb.addWidget(self.l)
+        self.sb.addWidget(self.updateButton)
         self.setStatusBar(self.sb)
-    def update(self):
-        self.sb.showMessage("Threads: " + str(self.wid.getThreads()))
+        self.sb.show()
+
+    def refresh(self):
+        self.l.setText("Threads: " + str(self.wid.getThreads()))
+        self.wid.list.clear()
+        self.wid.BackupList()
     def closeEvent(self, event):
         if self.wid.BM is None:
             print("No Backup Manager loaded")
@@ -198,5 +225,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     win = Window()
     win.show()
-    win.update()
     sys.exit(app.exec_())

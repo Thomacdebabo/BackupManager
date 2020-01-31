@@ -14,6 +14,8 @@ from PyQt5.QtCore import QThreadPool
 class BackupManager(): #A hub to manage all Backups
     def __init__(self, dir):
         self.threadpool = QThreadPool()
+        self.subthreadpool = QThreadPool()
+        self.threads = 0
         self.BackupDirectory = dir
         self.BackupStorage = {}
         self.load_from_txt()
@@ -23,9 +25,11 @@ class BackupManager(): #A hub to manage all Backups
     def getAmountOfThreads(self):
         return self.threadpool.activeThreadCount()
     def close(self):
-        self.save_prev_to_json()
-        self.save_to_txt()
-        self.cleanup()
+        try:
+            self.save_prev_to_json()
+            self.save_to_txt()
+            self.cleanup()
+        except: print("closing failed")
     def addBackup(self, b):
         assert isinstance(b, Backup), 'Not a Backup!'
         name = b.getName()
@@ -53,14 +57,18 @@ class BackupManager(): #A hub to manage all Backups
     def moveBackupManager(self, newdir):
         tempbdir = self.BackupDirectory
         self.BackupDirectory = newdir
+        self.threads += 1
         worker = CopyWorker(copy_tree(), tempbdir, newdir)
+        worker.signals.finished.connect(self.thread_complete)
         self.threadpool.start(worker)
 
     def backupALL(self):
         for b in self.BackupStorage.keys():
             self.back_up_threaded(b)
     def back_up_threaded(self, b):
+        self.threads += 1
         worker = CopyWorker(self.back_up, b, self.BackupDirectory)
+        worker.signals.finished.connect(self.thread_complete)
         self.threadpool.start(worker)
     def back_up(self, b, bdir):
         self.link_Backup(b, datetime.now(). strftime("%d_%m_%Y-%H_%M_%S"))
@@ -80,7 +88,10 @@ class BackupManager(): #A hub to manage all Backups
                 folder = os.path.basename(b.getDirectory())
                 i+=1
                 name = folder + "_" + date
-                b.setBackupLocation(dir+ 'Variant_'+ str(i) + "_" +name)
+                b.setBackupLocation(dir+ str(i) + "_" +name)
+    def save_Backup(self, key, bdir):
+        for b in self.BackupStorage[key]:
+            b.savetoBackupLocation (bdir)
     def getAll(self):
         return self.BackupStorage.keys()
     def getinfo(self, key):
@@ -89,11 +100,12 @@ class BackupManager(): #A hub to manage all Backups
             for p in i.returnData():
                 l.append(p)
         return l
+    def thread_complete(self):
+        self.threads -=1
+        print(self.threads)
+        if self.threads == 0:
+            print("All Done")
 
-
-    def save_Backup(self, key, bdir):
-        for b in self.BackupStorage[key]:
-            b.savetoBackupLocation(bdir)
 
     def print(self):
         for b in self.BackupStorage.keys():
@@ -105,9 +117,11 @@ class BackupManager(): #A hub to manage all Backups
             c = 0
             for i in self.BackupStorage[b]:
                 c+=1
-                f = open(self.BackupDirectory + "//" + b +"_"+  str(c) + "_prev.json", 'w')
-                f.write(json.dumps(i.getPrevious()))
-                f.close()
+                try:
+                    f = open(self.BackupDirectory + "//" + b +"_"+  str(c) + "_prev.json", 'w')
+                    f.write(json.dumps(i.getPrevious()))
+                    f.close()
+                except: print("couldn't save previous for: " + b+ "_" + str(i))
     def load_prev_from_json(self):
         for b in self.BackupStorage.keys():
             c = 0
@@ -161,12 +175,14 @@ class BackupManager(): #A hub to manage all Backups
     def deletePrevious(self):
         for b in self.BackupStorage.keys():
             for i in self.BackupStorage[b]:
-                worker = CopyWorker(i.deletePrevious)
+                self.threads +=1
+                worker = CopyWorker(i.deletePrevious, self.BackupDirectory)
+                worker.signals.finished.connect(self.thread_complete)
                 self.threadpool.start(worker)
     def deleteCurrent(self):
         for b in self.BackupStorage.keys():
             for i in self.BackupStorage[b]:
-                i.deleteCurrent()
+                i.deleteCurrent(self.BackupDirectory)
     def open_in_explorer(self, key):
         for b in self.BackupStorage[key]:
             b.open_in_explorer()
@@ -177,30 +193,43 @@ class BackupManager(): #A hub to manage all Backups
     def deleteSpecific(self, b, str):
         print(self.BackupStorage[b])
         for i in self.BackupStorage[b]:
-            if i.deleteFromString(str):
+            if i.deleteFromString(str, self.BackupDirectory):
                 self.BackupStorage[b].remove(i)
         if self.BackupStorage[b]== []:
             del self.BackupStorage[b]
 
 class Backup(): # an object which contains directory information of my backups
-    def __init__(self, name, dir, date= datetime.now(). strftime("%d_%m_%Y-%H_%M_%S")):
+    def __init__(self, name, dir, date= datetime.now(). strftime("%d_%m_%Y-%H_%M_%S"), enabledFlag = True):
         assert isinstance(name, str), 'Name should be string!'
         assert isinstance(dir, str), 'Directory should be string!'
         assert isinstance(date, str), 'Date should be string!'
         assert os.path.exists(dir), 'Directory not valid'
-
+        self.enabledFlag = enabledFlag
         self.current = {"Name": name, "Directory": dir, "Date": date, "Backupdir": " "}
         self.previous = [] #old backups
     def getName(self):
-        return self.current["Name"]
+        try:
+            return self.current["Name"]
+        except:
+            return None
     def getDirectory(self):
-        return self.current["Directory"]
+        try:
+            return self.current["Directory"]
+        except:
+            return None
     def getDate(self):
         return self.current["Date"]
     def setDate(self, date):
         self.current["Date"] = date
+    def getEnabledFlag(self):
+        return self.enabledFlag
+    def setEnabledFlag(self, enabledFlag):
+        self.enabledFlag = enabledFlag
     def getBackupLocation(self):
-        return self.current["Backupdir"]
+        try:
+            return self.current["Backupdir"]
+        except:
+            return None
     def setBackupLocation(self, dir):
         if(self.getBackupLocation()!= " "):
            self.previous.append(self.current.copy())
@@ -257,28 +286,29 @@ class Backup(): # an object which contains directory information of my backups
         return self.previous
     def setPrevious(self, pr):
         self.previous = pr.copy()
-    def deletePrevious(self):
+    def deletePrevious(self,bdir):
         for b in self.previous:
-            print("deleting:" + b["Backupdir"])
-            self.deleteDirectory(b["Backupdir"])
+            dir = os.path.join(bdir, b["Backupdir"])
+            print("deleting:" + dir)
+            self.deleteDirectory(dir)
         self.previous = []
-    def deleteCurrent(self):
+    def deleteCurrent(self, bdir):
         try:
-            self.deleteDirectory(self.current["Backupdir"])
-            self.deletePrevious()
+            dir = os.path.join(bdir, self.current["Backupdir"])
+            self.deleteDirectory(dir)
         except: print("oopsie")
     def deleteDirectory(self,dir):
         if(os.path.exists(dir)):
             shutil.rmtree(dir)
         else:
             print(dir + " doesn't exist")
-    def deleteFromString(self, str):
+    def deleteFromString(self, str, bdir):
         print(str)
         print(self.returndict(self.current))
         if str == self.returndict(self.current):
             print(str)
             try:
-                self.deleteCurrent()
+                self.deleteCurrent(bdir)
                 print("deleted current: " + str)
             except: print("doesnt exist")
             return True
@@ -286,8 +316,9 @@ class Backup(): # an object which contains directory information of my backups
             for p in self.previous:
                 print(p)
                 if str == self.returndict(p):
+                    dir = os.path.join(bdir, p["Backupdir"])
                     self.previous.pop(p)
-                    self.deleteDirectory(p["Backupdir"])
+                    self.deleteDirectory(dir)
                     print("deleted previous: " +  str)
                 return False
         return False
