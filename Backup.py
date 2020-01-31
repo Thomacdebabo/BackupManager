@@ -104,8 +104,6 @@ class BackupManager(): #A hub to manage all Backups
         print(self.threads)
         if self.threads == 0:
             print("All Done")
-
-
     def print(self):
         for b in self.BackupStorage.keys():
             print("-----" + b + "-----")
@@ -196,6 +194,16 @@ class BackupManager(): #A hub to manage all Backups
                 self.BackupStorage[b].remove(i)
         if self.BackupStorage[b]== []:
             del self.BackupStorage[b]
+    def setEF(self, key, eFlag, str = ""):
+        if str=="":
+            for i in self.BackupStorage[key]:
+                i.setEnabledFlag(eFlag)
+        else:
+            for i in self.BackupStorage[key]:
+                if i.checkifstringiscurrent(str):
+                    i.setEnabledFlag(eFlag)
+
+
 
 class Backup(): # an object which contains directory information of my backups
     def __init__(self, name, dir, date= datetime.now(). strftime("%d_%m_%Y-%H_%M_%S"), enabledFlag = True):
@@ -305,7 +313,6 @@ class Backup(): # an object which contains directory information of my backups
         print(str)
         print(self.returndict(self.current))
         if str == self.returndict(self.current):
-            print(str)
             try:
                 self.deleteCurrent(bdir)
                 print("deleted current: " + str)
@@ -321,5 +328,9 @@ class Backup(): # an object which contains directory information of my backups
                     print("deleted previous: " +  str)
                 return False
         return False
-
+    def checkifstringiscurrent(self, str):
+        if str == self.returndict(self.current):
+            return True
+        else:
+            return False
 
