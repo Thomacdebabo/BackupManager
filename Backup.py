@@ -8,6 +8,7 @@ import sys
 from CopyWorker import CopyWorker
 from PyQt5.QtCore import QThreadPool
 #from EfficientCopy import copytree
+import subprocess
 
 
 class BackupManager(): #A hub to manage all Backups
@@ -185,7 +186,7 @@ class BackupManager(): #A hub to manage all Backups
             b.open_in_explorer()
     def open_Backup_in_explorer(self, key):
         for b in self.BackupStorage[key]:
-            try: b.open_Backup_in_explorer()
+            try: b.open_Backup_in_explorer(self.BackupDirectory)
             except(AssertionError): print("Directory not valid")
     def deleteSpecific(self, b, str):
         print(self.BackupStorage[b])
@@ -255,13 +256,18 @@ class Backup(): # an object which contains directory information of my backups
             print(sys.exc_info())
             print("failed to do Backup for " +self.current["Name"])
     def open_in_explorer(self):
-        assert os.path.exists(self.current["Directory"]), 'Directory not valid'
-        os.startfile(self.current["Directory"])
-        #subprocess.Popen(r'explorer /open,"' + self.current["Directory"] + '\\"')
-    def open_Backup_in_explorer(self):
-        assert os.path.exists(self.current["Backupdir"]), 'Directory not valid'
-        os.startfile(self.current["Backupdir"])
-        #subprocess.Popen(r'explorer /open,"' + self.current["Backupdir"] + r'\\"')
+        assert os.path.exists(self.current["Directory"]), 'Directory not valid:' + self.current["Directory"]
+        try:
+            os.startfile(self.current["Directory"])
+        except:
+            subprocess.Popen(r'explorer /open,"' + self.current["Directory"] + '\\"')
+    def open_Backup_in_explorer(self,bdir):
+        dir = os.path.join(bdir, self.current["Backupdir"])
+        assert os.path.exists(dir), 'Directory not valid: '
+        try:
+            os.startfile(dir)
+        except:
+            subprocess.Popen(r'explorer /open,"' + dir + r'\\"')
     def printData(self):
         print("-Current-")
         self.printdict(self.current)

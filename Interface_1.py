@@ -165,7 +165,6 @@ class Widget(QWidget):
         self.BM.deletePrevious()
         self.list.clear()
         self.BackupList()
-
     def BackupList(self):
         for i in self.BM.getAll():
             self.list.addBU(i,self.BM.getinfo(i))
