@@ -58,9 +58,9 @@ class BackupManager(): #A hub to manage all Backups
         tempbdir = self.BackupDirectory
         self.BackupDirectory = newdir
         self.threads += 1
-        worker = CopyWorker(copy_tree(), tempbdir, newdir)
-        worker.signals.finished.connect(self.thread_complete)
-        self.threadpool.start(worker)
+        print(tempbdir)
+        print(newdir)
+
 
     def backupALL(self):
         for b in self.BackupStorage.keys():
